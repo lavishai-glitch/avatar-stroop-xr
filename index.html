@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Avatar-frame spatial Stroop (Quest 3)</title>
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+  </script>
+  <style>
+    html, body { margin: 0; height: 100%; background: #1b1d21; color: #e8e8e8; font-family: system-ui, Arial, sans-serif; }
+    #view { position: fixed; inset: 0; }
+    #ui { position: fixed; top: 12px; left: 12px; width: 340px; max-height: calc(100% - 24px); overflow: auto;
+          background: rgba(20, 22, 26, 0.92); border: 1px solid #444; border-radius: 10px; padding: 14px; font-size: 14px; z-index: 2; }
+    #ui h2 { margin: 0 0 10px; font-size: 16px; }
+    #ui label { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; gap: 8px; }
+    #ui input, #ui select { width: 140px; background: #2a2d33; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 4px 6px; }
+    #ui input[type=checkbox] { width: auto; }
+    .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    button { background: #3b6ea8; color: white; border: 0; border-radius: 6px; padding: 8px 12px; font-size: 14px; cursor: pointer; }
+    button:disabled { background: #555; cursor: default; }
+    button.secondary { background: #4a4f58; }
+    #status { margin-top: 10px; color: #ffd27a; min-height: 18px; }
+    #log { margin-top: 8px; font-size: 12px; color: #aab; max-height: 160px; overflow: auto; }
+    #downloads a { display: block; color: #8cc4ff; margin: 4px 0; word-break: break-all; }
+    meter { width: 100%; }
+  </style>
+</head>
+<body>
+  <div id="view"></div>
+  <div id="ui">
+    <h2>Avatar-frame spatial Stroop</h2>
+    <label>Participant ID <input id="pid" value="P01"></label>
+    <label>Session <select id="session"><option>1</option><option>2</option></select></label>
+    <label>Phase <select id="phase"><option value="pre">pre (before training)</option><option value="post">post (after training)</option></select></label>
+    <label>Block sequence <select id="seq"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+    <label>Reps per cell (×20 trials) <input id="reps" type="number" min="1" max="6" value="4"></label>
+    <label>Record microphone <input id="useMic" type="checkbox" checked></label>
+    <div class="row">
+      <button id="btnMicTest" class="secondary">Test mic</button>
+      <button id="btnXR">Enter VR</button>
+      <button id="btnDesktop" class="secondary">Desktop test</button>
+    </div>
+    <meter id="meter" min="0" max="1" value="0"></meter>
+    <div id="status"></div>
+    <div id="downloads"></div>
+    <div id="log"></div>
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
