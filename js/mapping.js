@@ -15,22 +15,25 @@ const UP = new THREE.Vector3(0, 1, 0);
 const FWD = new THREE.Vector3(0, 0, -1);
 const REST_PITCH = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.55, 0, 0)); // controller tilted down at rest
 
+// Quest-style controller. Local frame: points along -Z; the handle runs along (0, 1, -0.35) through the
+// fist (origin = palm centre); the head and tracking ring sit at the top front.
 function makeController() {
   const g = new THREE.Group();
   const body = new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.45 });
   const ringMat = new THREE.MeshStandardMaterial({ color: 0x3a3d43, roughness: 0.35 });
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.019, 0.105, 18), body);
-  handle.position.set(0, -0.035, 0.012);
-  handle.rotation.x = -0.45;
+  const tilt = Math.atan2(0.35, 1); // handle leans forward
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.018, 0.1, 18), body);
+  handle.rotation.x = -tilt;
   g.add(handle);
-  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.018, 24), body);
-  head.position.set(0, 0.016, -0.01);
-  head.rotation.x = 0.35;
+  const top = new THREE.Vector3(0, 0.055, 0).applyAxisAngle(new THREE.Vector3(1, 0, 0), -tilt);
+  const head = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.016, 24), body);
+  head.position.copy(top).add(new THREE.Vector3(0, 0, -0.012));
   g.add(head);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.038, 0.006, 10, 32), ringMat);
-  ring.position.set(0, 0.02, -0.02);
-  ring.rotation.x = Math.PI / 2 + 0.35;
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.036, 0.0055, 10, 32), ringMat);
+  ring.position.copy(top).add(new THREE.Vector3(0, 0.004, -0.02));
+  ring.rotation.x = Math.PI / 2 + 0.3;
   g.add(ring);
+  g.userData.tip = top.clone().add(new THREE.Vector3(0, 0, -0.04)); // ray origin
   return g;
 }
 
@@ -103,15 +106,13 @@ export class BodyMap {
     const av = this.exp.avatar;
     av.reach(side, target);
     const dir = FWD.clone().applyQuaternion(qWorld);
-    const fingers = dir.clone().addScaledVector(UP, -0.35).normalize();
-    const wrist = av.wrist(side);
-    av.aimHand(side, wrist.clone().addScaledVector(fingers, 0.1));
+    const palm = av.gripHand(side, qWorld);       // hand turned around the controller; palm centre
     const ctrl = this.controllers[side];
     ctrl.visible = true;
-    ctrl.position.copy(this.exp.root.worldToLocal(wrist.clone().addScaledVector(fingers, 0.075)));
+    ctrl.position.copy(this.exp.root.worldToLocal(palm));
     ctrl.quaternion.copy(rootQinv.clone().multiply(qWorld));
     ctrl.updateMatrixWorld(true);
-    const origin = ctrl.localToWorld(new THREE.Vector3(0, 0.01, -0.06));
+    const origin = ctrl.localToWorld(ctrl.userData.tip.clone());
     this.rayVis[side].group.visible = withRay;
     return { origin, dir, side };
   }

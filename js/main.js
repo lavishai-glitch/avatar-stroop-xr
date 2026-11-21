@@ -5,7 +5,7 @@ import { makeBlock, hashSeed } from './trials.js';
 import { Logger } from './logger.js';
 import { Input } from './input.js';
 import { BodyMap } from './mapping.js';
-import { TowerGame } from './training.js';
+import { BlastGame } from './training.js';
 
 // ---------- renderer / camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -22,7 +22,7 @@ scene.add(camera);
 const exp = new ExperimentScene(scene);
 const input = new Input(renderer);
 const bodyMap = new BodyMap(exp);
-const game = new TowerGame(exp, bodyMap);
+const game = new BlastGame(exp, bodyMap);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -129,7 +129,7 @@ function instructionText() {
   if (cfg.phase === 'pre') {
     return ['ניסוי נקודת מבט', 'קובייה תופיע על השולחן', 'לחצ/י לפי המיקום שלה ביחס לדמות', map, 'התעלם/י מהמילה · טריגר להתחלה'];
   }
-  return ['ניסוי נקודת מבט', 'בנה/י מגדל: כוון/י את הקרן מהשלט של הדמות לקובייה · טריגר = תפיסה', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות · ' + map,
+  return ['ניסוי נקודת מבט', 'פוצץ/י קוביות: כוון/י את הקרן מהשלט של הדמות לקובייה ולחצ/י טריגר', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות · ' + map,
     'grip = איפוס הידיים בכל רגע', 'החזק/י את הידיים לפנים בנוחות ולחצ/י טריגר להתחלה'];
 }
 
@@ -338,6 +338,6 @@ $('btnDesktop').addEventListener('click', () => startDesktop().catch((e) => ui.s
 
 // Exposed for automated tests
 window.__exp = {
-  get state() { return state; }, get logger() { return logger; }, get cur() { return cur; }, exp, input, bodyMap, game,
+  get state() { return state; }, get logger() { return logger; }, get cur() { return cur; }, exp, input, bodyMap, game, camera,
   setFake(f) { window.__externalFake = true; input.fake = f; },
 };

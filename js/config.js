@@ -28,9 +28,11 @@ export const TIMING = {   // milliseconds unless noted
 export const TRAINING = {
   mainSeconds: 300,       // first training of a post-training session
   topUpSeconds: 45,       // before each later block
-  cubesPerTower: 5,
-  cubeSize: 0.07,
-  snapRadius: 0.08,       // ray-on-table point within this of the pad centre = stack on the tower
+  activeCubes: 3,         // cubes on the table at once
+  cubeSize: 0.08,
+  respawnMs: 500,         // a blasted cube reappears elsewhere after this
+  spawnForward: [0.6, 1.15],  // spawn range from the avatar's shoulders, metres forward...
+  spawnLateral: 0.38,         // ...and +/- this to the sides (always kept on the table)
 };
 
 // Controller -> avatar hand mapping (relative; metres in the avatar's frame, from its shoulder centre)

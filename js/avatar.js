@@ -54,6 +54,7 @@ export class Avatar {
         arm: bone(B(s, 'Arm')), fore: bone(B(s, 'ForeArm')), hand: bone(B(s, 'Hand')),
         handTip: bone(B(s, 'HandMiddle1')) || bone(B(s, 'Hand')),
         up: bone(B(s, 'UpLeg')), leg: bone(B(s, 'Leg')), foot: bone(B(s, 'Foot')), toe: bone(B(s, 'ToeBase')),
+        fingers: ['Index', 'Middle', 'Ring', 'Pinky', 'Thumb'].map((f) => [1, 2, 3].map((k) => bone(B(s, `Hand${f}${k}`)))),
       };
     }
 
@@ -70,6 +71,7 @@ export class Avatar {
 
     this._sit();
     this._buildChair();
+    this._setupGrip();
 
     // Segment lengths for IK
     this.len = {};
@@ -168,6 +170,74 @@ export class Avatar {
     const E = S.clone().addScaledVector(dir, a).addScaledVector(pole, h);
     aim(L.arm, L.fore, E);
     aim(L.fore, L.hand, T);
+  }
+
+  // Measure each hand's frame in the bind pose (palms down) and curl the fingers into a grip.
+  // Hand frame: F = wrist -> middle knuckle, S = pinky knuckle -> index knuckle (thumb side), P = palm normal.
+  _setupGrip() {
+    this.model.updateMatrixWorld(true);
+    this.grip = {};
+    const wp = (b) => b.getWorldPosition(new THREE.Vector3());
+    for (const side of ['Left', 'Right']) {
+      const L = this.b[side];
+      const [idx, mid, , pinky, thumb] = L.fingers;
+      if (!idx[0] || !mid[0] || !pinky[0]) continue;
+      const W = wp(L.hand);
+      const F = wp(mid[0]).sub(W).normalize();
+      const S = wp(idx[0]).sub(wp(pinky[0]));
+      S.addScaledVector(F, -S.dot(F)).normalize();
+      const N = new THREE.Vector3().crossVectors(F, S);
+      const sigma = N.y < 0 ? 1 : -1;             // bind pose has palms facing down
+      const P = N.clone().multiplyScalar(sigma);
+      const inv = L.hand.getWorldQuaternion(new THREE.Quaternion()).invert();
+      this.grip[side] = { sigma, Fl: F.clone().applyQuaternion(inv), Sl: S.clone().applyQuaternion(inv), Pl: P.clone().applyQuaternion(inv) };
+
+      // Curl: rotate each phalanx toward the palm about the axis F x P.
+      const curl = (bonesArr, angles, axisFn) => {
+        bonesArr.forEach((b, i) => {
+          if (!b) return;
+          b.updateWorldMatrix(true, false);
+          const q = new THREE.Quaternion().setFromAxisAngle(axisFn(), angles[i]);
+          const wq = b.getWorldQuaternion(new THREE.Quaternion());
+          const pq = b.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+          b.quaternion.copy(pq.multiply(q.multiply(wq)));
+          b.updateWorldMatrix(false, true);
+        });
+      };
+      const fingerAxis = () => new THREE.Vector3().crossVectors(F, P).normalize();
+      for (const chain of [idx, mid, L.fingers[2], pinky]) curl(chain, [1.05, 1.25, 0.8], fingerAxis);
+      if (thumb[0]) {
+        const tdir = wp(thumb[1] || thumb[0]).sub(wp(thumb[0])).normalize();
+        curl(thumb, [0.25, 0.45, 0.35], () => new THREE.Vector3().crossVectors(tdir, P).normalize());
+      }
+    }
+  }
+
+  // Desired hand frame for holding a controller whose pointing direction is -Z of qCtrl (world):
+  // knuckles forward and a little down, thumb side up and slightly forward.
+  handFrame(side, qCtrl) {
+    const g = this.grip[side];
+    const F = new THREE.Vector3(0, -0.3, -1).normalize().applyQuaternion(qCtrl);
+    const S = new THREE.Vector3(0, 1, -0.35).applyQuaternion(qCtrl);
+    S.addScaledVector(F, -S.dot(F)).normalize();
+    const P = new THREE.Vector3().crossVectors(F, S).multiplyScalar(g ? g.sigma : 1);
+    return { F, S, P };
+  }
+
+  // Turn the hand to hold a controller oriented qCtrl; returns the palm centre (world).
+  gripHand(side, qCtrl) {
+    const g = this.grip[side], L = this.b[side];
+    const { F, S, P } = this.handFrame(side, qCtrl);
+    if (g) {
+      const Ml = new THREE.Matrix4().makeBasis(g.Fl, g.Sl, g.Pl);
+      const Md = new THREE.Matrix4().makeBasis(F, S, P);
+      const R = Md.multiply(Ml.transpose());
+      const wq = new THREE.Quaternion().setFromRotationMatrix(R);
+      const pq = L.hand.parent.getWorldQuaternion(new THREE.Quaternion()).invert();
+      L.hand.quaternion.copy(pq.multiply(wq));
+      L.hand.updateWorldMatrix(false, true);
+    }
+    return this.wrist(side).addScaledVector(F, 0.07).addScaledVector(P, 0.035);
   }
 
   // Point the hand (wrist -> fingers) at a world target.
