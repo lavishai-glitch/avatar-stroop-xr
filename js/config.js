@@ -1,50 +1,54 @@
 // All experiment parameters in one place. Values are starting points for the pilot.
 
-export const WORDS = {
-  right: 'ימין',
-  left: 'שמאל',
-  near: 'קרוב',
-  far: 'רחוק',
-  neutral: '####',
-};
+export const WORDS = { near: 'קרוב', far: 'רחוק', neutral: '####' };
 
 // Geometry in metres, in the "scene frame": participant at the origin facing -Z,
 // +X to the participant's right. The scene root is aligned to the head on calibration.
 export const GEOM = {
-  tableDist: 1.5,        // horizontal distance from the head to the table centre P
-  tableSize: 1.0,        // square table edge
-  tableBelowEye: 0.5,    // table top = calibrated eye height - this
-  postOffset: 0.35,      // A/B left-right of P, C/D nearer/farther than P
-  postHeight: 0.12,
-  wordAbovePost: 0.20,   // word centre above the post top
-  wordWidth: 0.30,       // word plate size (letters about 6 cm high)
-  wordHeight: 0.12,
-  fixAboveTable: 0.25,
-  avatarOffset: 0.90,    // avatar seat distance from P along X
+  tableDist: 1.5,       // horizontal distance from the head to the table centre P
+  tableSize: 1.0,
+  tableBelowEye: 0.5,   // table top = calibrated eye height - this
+  avatarOffset: 0.90,   // avatar seat distance from P along X (avatar faces P)
+  stimOffset: 0.35,     // stimulus cube: P -/+ this along the avatar's line of sight (near / far for the avatar)
+  stimCube: 0.12,       // stimulus cube edge
+  stimLift: 0.10,       // cube bottom above the table
+  fixAboveTable: 0.20,
+  // Arm mapping: participant shoulder centre = eye height - this
+  shoulderBelowEye: 0.25,
 };
 
-// Milliseconds
-export const TIMING = {
+export const TIMING = {   // milliseconds unless noted
   itiMin: 800,
   itiMax: 1200,
   fixation: 500,
-  stimMax: 2000,     // word disappears after this if no voice
-  respWindow: 2500,  // trial ends as a timeout after this
-  minVoiceRT: 150,   // ignore sound earlier than this after onset
-  restSeconds: 30,
+  stimMax: 2000,
+  respWindow: 2500,
+  restSeconds: 20,
+  transitionMs: 1500,     // "test starts" message between training and trials
 };
 
-// Block order per counterbalancing sequence: [task, avatar side]
-// S = judge from own perspective, A = from the avatar's; R/L = avatar on the participant's right/left
+export const TRAINING = {
+  mainSeconds: 300,       // first training of a post-training session
+  topUpSeconds: 45,       // before each later block
+  cubesPerTower: 5,
+  cubeSize: 0.07,
+  grabRadius: 0.10,       // avatar hand point to cube centre
+  snapRadius: 0.06,       // horizontal tolerance to land on the tower
+};
+
+// Avatar side per block (avatar on the participant's Right / Left).
 export const BLOCK_SEQS = {
-  1: [['S', 'R'], ['A', 'R'], ['A', 'L'], ['S', 'L']],
-  2: [['A', 'R'], ['S', 'R'], ['S', 'L'], ['A', 'L']],
-  3: [['S', 'L'], ['A', 'L'], ['A', 'R'], ['S', 'R']],
-  4: [['A', 'L'], ['S', 'L'], ['S', 'R'], ['A', 'R']],
+  1: ['R', 'L', 'L', 'R'],
+  2: ['L', 'R', 'R', 'L'],
 };
 
-export const VOICE = {
-  calibrationMs: 2000,
-  thresholdFactor: 4,   // threshold = max(noise RMS * factor, minThreshold)
-  minThreshold: 0.02,
+// Right-controller buttons (xr-standard mapping: 4 = A, 5 = B).
+export const BUTTON_MAPS = {
+  1: { near: 4, far: 5, label: 'A = קרוב · B = רחוק' },
+  2: { near: 5, far: 4, label: 'A = רחוק · B = קרוב' },
+};
+
+export const AVATARS = {
+  male: { file: 'models/rpm.glb', height: 1.78, prefix: '' },
+  female: { file: 'models/Michelle.glb', height: 1.68, prefix: 'mixamorig' },
 };

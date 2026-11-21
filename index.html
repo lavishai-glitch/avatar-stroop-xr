@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Avatar-frame spatial Stroop (Quest 3)</title>
   <script type="importmap">
-    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+                   "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/" } }
   </script>
   <style>
     html, body { margin: 0; height: 100%; background: #1b1d21; color: #e8e8e8; font-family: system-ui, Arial, sans-serif; }
@@ -32,17 +33,19 @@
     <h2>Avatar-frame spatial Stroop</h2>
     <label>Participant ID <input id="pid" value="P01"></label>
     <label>Session <select id="session"><option>1</option><option>2</option></select></label>
-    <label>Phase <select id="phase"><option value="pre">pre (before training)</option><option value="post">post (after training)</option></select></label>
-    <label>Block sequence <select id="seq"><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
-    <label>Reps per cell (×20 trials) <input id="reps" type="number" min="1" max="6" value="4"></label>
-    <label>Record microphone <input id="useMic" type="checkbox" checked></label>
+    <label>Phase <select id="phase"><option value="post">post: training + live avatar</option><option value="pre">pre: no training, static avatar</option></select></label>
+    <label>Mapping <select id="mapping"><option value="anatomical">anatomical</option><option value="mirror">mirror</option></select></label>
+    <label>Avatar <select id="avatarModel"><option value="male">male</option><option value="female">female</option></select></label>
+    <label>Side sequence <select id="seq"><option value="1">1: R L L R</option><option value="2">2: L R R L</option></select></label>
+    <label>Buttons <select id="buttonMap"><option value="1">A = near, B = far</option><option value="2">A = far, B = near</option></select></label>
+    <label>Reps per cell (×4 trials) <input id="reps" type="number" min="1" max="30" value="16"></label>
+    <label>Main training (s) <input id="trainS" type="number" min="10" max="900" value="300"></label>
+    <label>Neutral cube (####) <input id="neutral" type="checkbox"></label>
     <div class="row">
-      <button id="btnMicTest" class="secondary">Test mic</button>
       <button id="btnXR">Enter VR</button>
       <button id="btnDesktop" class="secondary">Desktop test</button>
     </div>
-    <meter id="meter" min="0" max="1" value="0"></meter>
-    <div id="status"></div>
+        <div id="status"></div>
     <div id="downloads"></div>
     <div id="log"></div>
   </div>

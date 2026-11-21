@@ -1,9 +1,11 @@
 import * as THREE from 'three';
-import { GEOM, TIMING, BLOCK_SEQS } from './config.js';
+import { GEOM, TIMING, TRAINING, BLOCK_SEQS, BUTTON_MAPS, AVATARS } from './config.js';
 import { ExperimentScene } from './scene.js';
 import { makeBlock, hashSeed } from './trials.js';
-import { Mic } from './audio.js';
 import { Logger } from './logger.js';
+import { Input } from './input.js';
+import { BodyMap } from './mapping.js';
+import { TowerGame } from './training.js';
 
 // ---------- renderer / camera ----------
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -14,10 +16,13 @@ renderer.xr.setReferenceSpaceType('local-floor');
 document.getElementById('view').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(80, window.innerWidth / window.innerHeight, 0.05, 50);
-camera.position.set(0, 1.2, 0);           // desktop preview: seated eye height
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.05, 50);
+camera.position.set(0, 1.2, 0);
 scene.add(camera);
 const exp = new ExperimentScene(scene);
+const input = new Input(renderer);
+const bodyMap = new BodyMap(exp);
+const game = new TowerGame(exp, bodyMap);
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -32,52 +37,50 @@ const ui = {
   log: (t) => { const d = document.createElement('div'); d.textContent = t; $('log').prepend(d); },
 };
 
-const mic = new Mic();
 let state = 'idle';
 let cfg = null, logger = null, blocks = [], blockIdx = 0, trials = [], tIdx = 0;
-let trialRows = [], headRows = [];
-let cur = null;          // current trial runtime record
+let trialRows = [], motionRows = [];
+let cur = null, stateEnd = 0;
 let pendingStart = false, pendingCalibrate = false;
-let restEnd = 0;
 let desktopMode = false;
 const headPos = new THREE.Vector3(), headQuat = new THREE.Quaternion();
+const keys = {};
 
 function readConfig() {
   return {
     participant: $('pid').value.trim() || 'P00',
     session: Number($('session').value),
-    phase: $('phase').value,
+    phase: $('phase').value,                     // pre = no training, static avatar; post = training + live avatar
+    mapping: $('phase').value === 'pre' ? 'static' : $('mapping').value,
+    avatarModel: $('avatarModel').value,
     seq: Number($('seq').value),
+    buttonMap: Number($('buttonMap').value),
     reps: Number($('reps').value),
-    useMic: $('useMic').checked,
-    geometry: GEOM, timing: TIMING,
+    includeNeutral: $('neutral').checked,
+    mainTrainingS: Number($('trainS').value),
+    geometry: GEOM, timing: TIMING, training: TRAINING,
   };
 }
 
-async function setupMic() {
-  if (!cfg.useMic) return;
-  if (!mic.available) await mic.init();
-  await mic.resume();
-  ui.status('Calibrating microphone: stay quiet for 2 s…');
-  const c = await mic.calibrate();
-  ui.log(`Mic: ${mic.sampleRate} Hz, noise RMS ${c.noiseRms.toFixed(4)}, threshold ${c.threshold.toFixed(4)}`);
-}
-
-function prepareSession() {
+async function prepareSession() {
   cfg = readConfig();
   logger = new Logger(cfg);
-  blocks = BLOCK_SEQS[cfg.seq].map(([task, side], i) => ({ idx: i + 1, task, side, seed: hashSeed(`${cfg.participant}|${cfg.session}|${cfg.phase}|${i + 1}`) }));
+  blocks = BLOCK_SEQS[cfg.seq].map((side, i) => ({ idx: i + 1, side, seed: hashSeed(`${cfg.participant}|${cfg.session}|${cfg.phase}|${i + 1}`) }));
   blockIdx = 0;
+  game.events = [];
   $('downloads').innerHTML = '';
+  if (!exp.avatar.ready || exp.avatarModel !== cfg.avatarModel) {
+    ui.status('Loading avatar…');
+    await exp.loadAvatar(AVATARS[cfg.avatarModel]);
+    exp.avatarModel = cfg.avatarModel;
+  }
+  bodyMap.mode = 'static';
 }
 
 async function startXR() {
-  prepareSession();
-  await setupMic();
-  const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor', 'hand-tracking'] });
-  session.addEventListener('end', onSessionEnd);
-  session.addEventListener('select', () => onAdvance());
-  session.addEventListener('squeeze', () => { pendingCalibrate = true; });
+  await prepareSession();
+  const session = await navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] });
+  session.addEventListener('end', () => { if (state !== 'done') finishSession('ended early'); });
   await renderer.xr.setSession(session);
   pendingCalibrate = true;
   goInstructions();
@@ -85,82 +88,109 @@ async function startXR() {
 
 async function startDesktop() {
   desktopMode = true;
-  prepareSession();
-  await setupMic();
+  await prepareSession();
   pendingCalibrate = true;
   goInstructions();
-  ui.status('Desktop test: Space = start block, 1–4 = simulated voice response, Esc = end session');
+  ui.status('Desktop test: Space = continue · arrows/PgUp/PgDn move the right hand · G = grab · 1 = A, 2 = B · Esc = end');
 }
 
-function onSessionEnd() {
-  if (state !== 'done') finishSession('ended early');
-}
-
+// ---------- desktop keyboard: fake right controller ----------
+const fakeRight = { pos: null, trigger: false, a: false, b: false };
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'Enter') {
-    if (state !== 'idle' && state !== 'done') e.preventDefault(); // don't re-click a focused button
-    onAdvance();
-  }
+  keys[e.code] = true;
+  if (e.code === 'Space') { if (state !== 'idle' && state !== 'done') e.preventDefault(); if (state === 'instructions') pendingStart = true; }
   if (e.code === 'KeyR') pendingCalibrate = true;
-  if (/^Digit[1-4]$/.test(e.code) && state === 'trials' && cur && cur.phase === 'stim') simulateVoice();
+  if (e.code === 'KeyG') fakeRight.trigger = true;
+  if (e.code === 'Digit1') fakeRight.a = true;
+  if (e.code === 'Digit2') fakeRight.b = true;
   if (e.code === 'Escape' && desktopMode && state !== 'idle' && state !== 'done') finishSession('ended by experimenter');
 });
-
-function onAdvance() {
-  if (state === 'instructions') pendingStart = true;
+window.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
+  if (e.code === 'KeyG') fakeRight.trigger = false;
+  if (e.code === 'Digit1') fakeRight.a = false;
+  if (e.code === 'Digit2') fakeRight.b = false;
+});
+function updateDesktopFake(dt) {
+  if (!desktopMode || window.__externalFake) return;
+  if (!fakeRight.pos) fakeRight.pos = exp.root.localToWorld(new THREE.Vector3(0.18, (exp.eyeY ?? 1.2) - 0.55, -0.35));
+  const v = 0.4 * dt / 1000, p = fakeRight.pos;
+  const local = exp.root.worldToLocal(p.clone());
+  if (keys.ArrowLeft) local.x -= v; if (keys.ArrowRight) local.x += v;
+  if (keys.ArrowUp) local.z -= v; if (keys.ArrowDown) local.z += v;
+  if (keys.PageUp) local.y += v; if (keys.PageDown) local.y -= v;
+  p.copy(exp.root.localToWorld(local));
+  input.fake = { right: fakeRight };
 }
 
-// ---------- block flow ----------
-const TASK_TEXT = {
-  S: ['מנקודת המבט שלך', 'אמור/י בקול איפה המילה נמצאת עבורך:', 'ימין · שמאל · קרוב · רחוק', 'התעלם/י מהמילה עצמה'],
-  A: ['מנקודת המבט של הדמות', 'אמור/י בקול איפה המילה נמצאת עבור הדמות:', 'ימין · שמאל · קרוב · רחוק', 'התעלם/י מהמילה עצמה'],
-};
+// ---------- flow ----------
+function instructionText() {
+  const map = BUTTON_MAPS[cfg.buttonMap].label;
+  if (cfg.phase === 'pre') {
+    return ['ניסוי נקודת מבט', 'קובייה תופיע על השולחן', 'לחצ/י לפי המיקום שלה ביחס לדמות', map, 'התעלם/י מהמילה · טריגר להתחלה'];
+  }
+  return ['ניסוי נקודת מבט', 'תחילה: בנה/י מגדלי קוביות דרך הידיים של הדמות', 'טריגר = תפיסה ושחרור', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות', `${map} · טריגר להתחלה`];
+}
 
 function goInstructions() {
   const b = blocks[blockIdx];
   exp.setAvatarSide(b.side);
-  exp.hideWord();
-  exp.fixation.visible = false;
-  exp.setPanel([...TASK_TEXT[b.task], `בלוק ${b.idx} מתוך ${blocks.length} · לחיצה להתחלה`]);
+  exp.hideStim(); exp.fixation.visible = false; exp.hideHud();
+  exp.setPanel(instructionText());
   state = 'instructions';
-  ui.log(`Block ${b.idx}: task ${b.task}, avatar ${b.side}`);
+  ui.log(`Block ${b.idx}: avatar ${b.side}`);
 }
 
 function startBlock(now) {
   const b = blocks[blockIdx];
-  trials = makeBlock(b.task, b.side, cfg.reps, b.seed);
-  tIdx = 0; trialRows = []; headRows = [];
+  exp.setAvatarSide(b.side);
   exp.hidePanel();
-  if (cfg.useMic) mic.startRecording();
+  motionRows = [];
+  bodyMap.mode = cfg.mapping;
+  if (cfg.phase === 'post') {
+    const secs = blockIdx === 0 ? cfg.mainTrainingS : TRAINING.topUpSeconds;
+    game.start(secs, now, `block${b.idx}`);
+    state = 'training';
+  } else {
+    goTransition(now);
+  }
+}
+
+function goTransition(now) {
+  exp.setPanel(['שלב המבחן', BUTTON_MAPS[cfg.buttonMap].label]);
+  state = 'transition';
+  stateEnd = now + TIMING.transitionMs;
+}
+
+function startTrials(now) {
+  const b = blocks[blockIdx];
+  exp.hidePanel();
+  trials = makeBlock(cfg.reps, cfg.includeNeutral, b.seed);
+  tIdx = 0; trialRows = [];
   state = 'trials';
   newTrial(now);
 }
 
-function endBlock() {
+function endBlock(now) {
   const b = blocks[blockIdx];
-  const audio = cfg.useMic ? mic.stopRecording() : null;
-  if (audio) for (const r of trialRows) r.wavFirstFrame = audio.firstFrame;
-  logger.finishBlock(b.idx, b.task, b.side, trialRows, headRows, audio);
-  const done = trialRows.filter((r) => !r.timeout).length;
-  ui.log(`Block ${b.idx} done: ${trialRows.length} trials, ${done} with a response`);
+  logger.finishBlock(b.idx, b.side, trialRows, motionRows);
+  const acc = trialRows.filter((r) => r.correct === 1).length;
+  ui.log(`Block ${b.idx} done: ${trialRows.length} trials, ${acc} correct`);
   blockIdx++;
   if (blockIdx >= blocks.length) return finishSession('complete');
   state = 'rest';
-  restEnd = performance.now() + TIMING.restSeconds * 1000;
+  stateEnd = now + TIMING.restSeconds * 1000;
+  exp.setAvatarSide(blocks[blockIdx].side); // move the avatar during the break
 }
 
 function finishSession(reason) {
+  if (state === 'done') return;
   state = 'done';
-  mic.disarm();
-  if (cfg && cfg.useMic && mic.recording) mic.stopRecording();
-  exp.hideWord(); exp.fixation.visible = false;
+  game.group.visible = false;
+  exp.hideStim(); exp.fixation.visible = false; exp.hideHud();
   exp.setPanel(['סיימנו את החלק הזה', 'תודה!']);
-  logger.finishSession({ endReason: reason, sampleRate: mic.sampleRate, noiseRms: mic.noiseRms, threshold: mic.threshold, blocks });
+  logger.finishSession({ endReason: reason, blocks }, game.events);
   ui.status(`Session ${reason}. Exit VR and download the files below.`);
-  renderDownloads();
-}
-
-function renderDownloads() {
   const box = $('downloads');
   box.innerHTML = '<h3>Data files</h3>';
   for (const f of logger.files) {
@@ -172,40 +202,23 @@ function renderDownloads() {
   }
 }
 
-// ---------- trial state machine (runs every frame) ----------
+// ---------- trials ----------
 function newTrial(now) {
-  if (tIdx >= trials.length) return endBlock();
-  const t = trials[tIdx];
+  if (tIdx >= trials.length) return endBlock(now);
   const iti = TIMING.itiMin + Math.random() * (TIMING.itiMax - TIMING.itiMin);
-  cur = { ...t, phase: 'iti', itiMs: Math.round(iti), itiEnd: now + iti };
+  cur = { ...trials[tIdx], phase: 'iti', itiMs: Math.round(iti), itiEnd: now + iti };
 }
 
-function simulateVoice() {
-  const now = performance.now();
-  cur.keyRtMs = Math.round(now - cur.stimOnsetMs);
-  cur.responded = true;
-}
-
-function onVoice(frame) {
-  if (!cur || cur.phase !== 'stim') return;
-  cur.voiceFrame = frame;
-  cur.onlineRtMs = Math.round(((frame - cur.stimAudioFrame) / mic.sampleRate) * 1000);
-  cur.responded = true;
-}
-
-function closeTrial(now, timeout) {
-  if (exp.word.visible) { exp.hideWord(); cur.stimOffsetMs = Math.round(now); }
-  mic.disarm();
+function closeTrial(now, pressed) {
+  if (exp.stim.visible) { exp.hideStim(); cur.stimOffsetMs = Math.round(now); }
   const b = blocks[blockIdx];
   const row = {
-    participant: cfg.participant, session: cfg.session, phase: cfg.phase, seq: cfg.seq,
-    block: b.idx, task: b.task, side: b.side, trial: cur.trial,
-    pos: cur.pos, word: cur.word, selfLabel: cur.selfLabel, avatarLabel: cur.avatarLabel,
-    correct: cur.correct, type: cur.type, typeSelfTask: cur.typeSelfTask, typeAvatarTask: cur.typeAvatarTask,
-    itiMs: cur.itiMs, fixOnsetMs: Math.round(cur.fixOnsetMs), stimOnsetMs: Math.round(cur.stimOnsetMs),
-    stimOffsetMs: cur.stimOffsetMs, stimAudioFrame: cur.stimAudioFrame, wavFirstFrame: null,
-    voiceFrame: cur.voiceFrame, onlineRtMs: cur.onlineRtMs, keyRtMs: cur.keyRtMs,
-    timeout: timeout ? 1 : 0, seed: b.seed,
+    participant: cfg.participant, session: cfg.session, phase: cfg.phase, mapping: cfg.mapping, avatarModel: cfg.avatarModel,
+    seq: cfg.seq, buttonMap: cfg.buttonMap, block: b.idx, side: b.side, trial: cur.trial,
+    pos: cur.pos, word: cur.word, type: cur.type, correctButton: cur.pos, pressed: pressed || '',
+    correct: pressed ? (pressed === cur.pos ? 1 : 0) : 0,
+    itiMs: cur.itiMs, fixOnsetMs: Math.round(cur.fixOnsetMs), stimOnsetMs: Math.round(cur.stimOnsetMs), stimOffsetMs: cur.stimOffsetMs,
+    rtMs: pressed ? Math.round(now - cur.stimOnsetMs) : '', timeout: pressed ? 0 : 1, seed: b.seed,
   };
   trialRows.push(row);
   logger.addTrial(row);
@@ -213,57 +226,75 @@ function closeTrial(now, timeout) {
   newTrial(now);
 }
 
-function step(now) {
-  if (state === 'rest') {
-    const left = Math.ceil((restEnd - now) / 1000);
-    if (left > 0) exp.setPanel(['הפסקה קצרה', `${left} שניות`]);
-    else goInstructions();
-    return;
-  }
-  if (state === 'instructions' && pendingStart) { pendingStart = false; startBlock(now); return; }
-  if (state !== 'trials' || !cur) return;
-
+function stepTrials(now, inp) {
   if (cur.phase === 'iti' && now >= cur.itiEnd) {
     exp.fixation.visible = true;
     cur.fixOnsetMs = now;
     cur.phase = 'fix';
   } else if (cur.phase === 'fix' && now >= cur.fixOnsetMs + TIMING.fixation) {
     exp.fixation.visible = false;
-    exp.showWord(cur.pos, cur.word);
-    cur.stimOnsetMs = now;          // time of the frame in which the word is first drawn
+    exp.showStim(cur.pos, cur.word);
+    cur.stimOnsetMs = now; // frame in which the cube is first drawn
     cur.phase = 'stim';
-    if (cfg.useMic) {
-      cur.stimAudioFrame = mic.perfToFrame(now);
-      mic.arm(cur.stimAudioFrame + Math.round(TIMING.minVoiceRT / 1000 * mic.sampleRate), onVoice);
-    }
   } else if (cur.phase === 'stim') {
+    const map = BUTTON_MAPS[cfg.buttonMap];
+    const r = inp.right;
+    const down = (idx) => (idx === 4 ? r.aDown : r.bDown);
+    if (down(map.near) && !down(map.far)) return closeTrial(now, 'near');
+    if (down(map.far) && !down(map.near)) return closeTrial(now, 'far');
     const dt = now - cur.stimOnsetMs;
-    if (cur.responded) return closeTrial(now, false);
-    if (dt >= TIMING.stimMax && exp.word.visible) { exp.hideWord(); cur.stimOffsetMs = Math.round(now); }
-    if (dt >= TIMING.respWindow) closeTrial(now, true);
+    if (dt >= TIMING.stimMax && exp.stim.visible) { exp.hideStim(); cur.stimOffsetMs = Math.round(now); }
+    if (dt >= TIMING.respWindow) closeTrial(now, null);
   }
 }
 
-// ---------- render loop ----------
+// ---------- per-frame ----------
+const f4 = (v) => (v === undefined || v === null ? '' : v.toFixed(4));
+function logMotion(now, inp) {
+  const L = (v) => (v ? exp.root.worldToLocal(v.clone()) : null);
+  const h = L(headPos), rc = inp.right.present ? L(inp.right.pos) : null, lc = inp.left.present ? L(inp.left.pos) : null;
+  const ar = exp.avatar.ready ? L(exp.avatar.handPoint('Right')) : null, al = exp.avatar.ready ? L(exp.avatar.handPoint('Left')) : null;
+  motionRows.push({ tMs: now.toFixed(1), state, headX: f4(h.x), headY: f4(h.y), headZ: f4(h.z),
+    headQx: f4(headQuat.x), headQy: f4(headQuat.y), headQz: f4(headQuat.z), headQw: f4(headQuat.w),
+    rCtrlX: f4(rc?.x), rCtrlY: f4(rc?.y), rCtrlZ: f4(rc?.z), lCtrlX: f4(lc?.x), lCtrlY: f4(lc?.y), lCtrlZ: f4(lc?.z),
+    avRHandX: f4(ar?.x), avRHandY: f4(ar?.y), avRHandZ: f4(ar?.z), avLHandX: f4(al?.x), avLHandY: f4(al?.y), avLHandZ: f4(al?.z) });
+}
+
+let lastT = 0;
 renderer.setAnimationLoop((time) => {
+  const now = time, dt = lastT ? now - lastT : 16; lastT = now;
   const xrCam = renderer.xr.isPresenting ? renderer.xr.getCamera() : camera;
   xrCam.getWorldPosition(headPos);
   xrCam.getWorldQuaternion(headQuat);
 
-  // Head pose is valid only once the headset reports a real height (first XR frames can be at 0).
-  if (pendingCalibrate && headPos.y > 0.3 && (state === 'instructions' || state === 'rest' || state === 'idle')) {
+  if (pendingCalibrate && headPos.y > 0.3 && ['idle', 'instructions', 'rest'].includes(state)) {
     exp.calibrate(headPos, headQuat, GEOM.tableBelowEye);
     pendingCalibrate = false;
+    fakeRight.pos = null;
     ui.log(`Calibrated: eye height ${headPos.y.toFixed(2)} m, table ${exp.tableY.toFixed(2)} m`);
   }
+  updateDesktopFake(dt);
+  const inp = input.read();
 
-  // performance.now() and the XR frame time share the same clock origin.
-  const now = time;
-  step(now);
-  if (state === 'trials') {
-    headRows.push({ tMs: now.toFixed(1), x: headPos.x.toFixed(4), y: headPos.y.toFixed(4), z: headPos.z.toFixed(4),
-      qx: headQuat.x.toFixed(5), qy: headQuat.y.toFixed(5), qz: headQuat.z.toFixed(5), qw: headQuat.w.toFixed(5) });
+  // Participant controls (instructions / rest)
+  if (state === 'instructions' && (inp.right.triggerDown || pendingStart)) { pendingStart = false; startBlock(now); }
+  if ((state === 'instructions' || state === 'rest') && inp.left.yDown) pendingCalibrate = true;
+
+  bodyMap.update(inp, headQuat);
+
+  if (state === 'training') {
+    if (game.update(now, inp)) { game.stop(now); goTransition(now); }
+  } else if (state === 'transition' && now >= stateEnd) {
+    startTrials(now);
+  } else if (state === 'trials' && cur) {
+    stepTrials(now, inp);
+  } else if (state === 'rest') {
+    const left = Math.ceil((stateEnd - now) / 1000);
+    if (left > 0) exp.setPanel(['הפסקה קצרה', `${left} שניות`, 'הדמות עוברת לצד השני']);
+    else goInstructions();
   }
+  if (['training', 'transition', 'trials'].includes(state)) logMotion(now, inp);
+
   exp.faceCamera(headPos);
   renderer.render(scene, camera);
 });
@@ -272,24 +303,17 @@ renderer.setAnimationLoop((time) => {
 for (const b of document.querySelectorAll('button')) b.addEventListener('click', () => b.blur());
 $('btnXR').addEventListener('click', () => startXR().catch((e) => ui.status('Could not start VR: ' + e.message)));
 $('btnDesktop').addEventListener('click', () => startDesktop().catch((e) => ui.status('Could not start: ' + e.message)));
-$('btnMicTest').addEventListener('click', async () => {
-  try {
-    if (!mic.available) await mic.init();
-    await mic.resume();
-    const c = await mic.calibrate();
-    ui.status(`Mic OK: noise ${c.noiseRms.toFixed(4)}, threshold ${c.threshold.toFixed(4)}. Speak to see the level.`);
-    const meter = $('meter');
-    const tick = () => { meter.value = Math.min(1, mic.level / (mic.threshold * 2)); requestAnimationFrame(tick); };
-    tick();
-  } catch (e) { ui.status('Mic error: ' + e.message); }
-});
 
 (async () => {
   const ok = navigator.xr && await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
   $('btnXR').disabled = !ok;
   ui.status(ok ? 'Ready. Fill in the session details and press Enter VR.' : 'WebXR VR not available here: use desktop test mode.');
   exp.setPanel(['ניסוי נקודת מבט', 'ממתין להתחלה']);
+  try { await exp.loadAvatar(AVATARS[$('avatarModel').value]); exp.avatarModel = $('avatarModel').value; } catch (e) { ui.status('Avatar failed to load: ' + e.message); }
 })();
 
 // Exposed for automated tests
-window.__exp = { get state() { return state; }, get trials() { return trials; }, get logger() { return logger; }, exp };
+window.__exp = {
+  get state() { return state; }, get logger() { return logger; }, get cur() { return cur; }, exp, input, bodyMap, game,
+  setFake(f) { window.__externalFake = true; input.fake = f; },
+};

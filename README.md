@@ -1,47 +1,54 @@
-# Avatar-frame spatial Stroop — Quest 3 (WebXR)
+# Avatar-frame Stroop: Quest 3 (WebXR)
 
-Version 1: scene + test task. The avatar is static; the visuomotor training phase comes next.
+Version 2: a human avatar driven by the controllers, a tower-building training game, and a near/far cube test.
 
-## Run it on the Quest 3
+Live: https://lavishai-glitch.github.io/avatar-stroop-xr/
 
-1. Host the folder on any HTTPS server (GitHub Pages works). WebXR and the microphone need HTTPS.
-2. Open the page in the Quest browser, fill in Participant / Session / Phase / Block sequence.
-3. **Test mic**: stay quiet 2 s (noise calibration), then speak and watch the level bar.
-4. **Enter VR**. The scene aligns to your head on entry: sit upright, look straight ahead.
-   - Squeeze (grip) re-centres the scene between blocks.
-   - Trigger / pinch starts each block from the instruction panel.
-5. After the last block (or when you exit VR), the page lists the data files. Tap each one to download.
+## Session flow
 
-Desktop test mode (any browser): Space starts a block, keys 1–4 simulate a voice response, R re-centres, and Esc ends the session.
+1. **Setup page**: participant, session, phase, mapping, avatar, side sequence, button map, reps, training length.
+2. **Enter VR**: sit upright and look ahead. The scene aligns to your head. The left controller's Y button re-centres it on the instruction or rest screens.
+3. **Instructions**: press the right trigger to start.
+4. **Training (phase = post)**: build towers of 5 cubes on the white pad in front of the avatar.
+   - The controllers drive the avatar's hands. In anatomical mapping, the right controller drives its right hand, with movement rotated into its frame. In mirror mapping, the right controller drives its left hand and the lateral movement is mirrored.
+   - Trigger grabs and releases a cube. Release over the pad to stack.
+   - The first block uses the main training (default 300 s). Later blocks get a 45 s top-up.
+5. **Test, straight after training**: a cube with קרוב or רחוק on all six faces appears on the avatar's line of sight, near or far from the avatar. Press the button for the cube's location relative to the avatar and ignore the word (A = near, B = far, or swapped by the button-map setting). **The avatar keeps following the controllers during the test.**
+6. **20 s rest**: the avatar moves to the other side, then the next block starts.
+7. At the end, exit VR and download the files from the page.
 
-## What each block does
+Phase = pre: no training, the avatar sits still (hands on the table), straight to the test.
 
-- Sequence 1–4 sets the order of task (S = own view, A = avatar's view) × avatar side (R/L), as in the design doc.
-- Each block is 20 cells (4 posts × 4 words + ####) × reps (default 4, so 80 trials). The order is shuffled with no immediate repeat, from a seed that is logged.
-- Each trial: blank ITI 800–1200 ms → fixation 500 ms → word above a post until voice onset (max 2000 ms) → timeout at 2500 ms.
-- There is a 30 s rest between blocks.
+## Design
 
-## Output files (per block)
+- The cube appears only on the avatar's line of sight, so both positions are the same distance from the participant. The participant's own near/far is neutral.
+- Each block has 2 positions × 2 words (+ optional ####) × reps, with a seeded shuffle and at most 3 identical cells in a row. Sides follow sequence 1 (R L L R) or 2 (L R R L).
+- Each trial: ITI 800–1200 ms → fixation 500 ms → cube until a response (shown for up to 2000 ms) → timeout at 2500 ms.
+
+## Output files
 
 | File | Content |
 |---|---|
-| `*_trials.csv` | One row per trial: position, word, both frame labels, correct answer, trial type in the judged frame and in both tasks, timestamps, online RT |
-| `*_head.csv` | Head pose every frame during the block |
-| `*_audio.wav` | Continuous microphone recording of the block (16-bit mono) |
-| `*_all_trials.csv`, `*_meta.json` | All trials of the session; config, sample rate, noise threshold, seeds |
+| `*_bN_<side>_trials.csv` | One row per trial: pos, word, congruent/incongruent, button pressed, correct, RT (ms from the frame the cube was drawn), timeout |
+| `*_bN_<side>_motion.csv` | Every frame during training and test: head pose, both controllers, both avatar hand points (scene frame, metres) |
+| `*_training_events.csv` | Grab / stack / drop / tower events with times |
+| `*_all_trials.csv`, `*_meta.json` | All trials and the full configuration |
 
-Trial types: `congJ`, `oppJ`, `matchO`, `oppO`, `neutral` (see the design doc). `type` is the type in the task actually run; `typeSelfTask` / `typeAvatarTask` give both.
+RT resolution is one frame (≈11 ms at 90 Hz), because buttons are polled each frame.
 
-**Offline RT:** the voice onset in the WAV is at sample `voiceFrame - wavFirstFrame` (online detection). For the real analysis, run a proper onset detector on the WAV starting from sample `stimAudioFrame - wavFirstFrame`. The spoken word is coded offline (Whisper or by hand).
+## Avatars
 
-## Known limits / to do
+- `models/rpm.glb`: male (Ready Player Me sample from the three.js examples).
+- `models/Michelle.glb`: female (Mixamo character from the three.js examples).
 
-- **Audio–visual latency:** `stimAudioFrame` comes from the output-clock mapping. Measure the fixed offset once (photodiode on a lens + mic, or a clap filmed through the headset) and subtract it. A constant offset cancels in within-subject contrasts.
-- Online detection is an energy threshold; noisy rooms need a higher `VOICE.thresholdFactor`.
-- Posts C and D are on the line of sight. Check in the pilot that near/far is named at ≥95% accuracy on neutral trials.
-- The avatar is a primitive mannequin. The training phase needs a rigged avatar driven by hand tracking (next version).
-- three.js loads from jsDelivr, so the headset needs internet. Vendor `three.module.js` locally for offline lab use.
+Both come from the three.js repository examples. Check their licences (Ready Player Me / Mixamo terms) before publishing a paper or a public build. For publication, a CC0 rigged human is the safer option.
+
+The arms use two-bone IK toward the mapped controller position. Wrist rotation is not mapped yet: the hand follows the forearm. The head copies the participant's head rotation (mirrored in mirror mode).
+
+## Desktop test
+
+Desktop mode works in any browser. Space starts a block. The arrows and PgUp/PgDn move the right "controller". G grabs, 1/2 press A/B, R re-centres, and Esc ends the session.
 
 ## Files
 
-`index.html` (setup page) · `js/config.js` (all parameters) · `js/trials.js` (labels, classification, block generation) · `js/scene.js` · `js/avatar.js` · `js/audio.js` + `js/mic-worklet.js` · `js/logger.js` · `js/main.js` (state machine, XR loop)
+`index.html` · `js/config.js` (all parameters) · `js/avatar.js` (loading, seated pose, IK) · `js/mapping.js` (controller → avatar) · `js/training.js` (tower game) · `js/trials.js` · `js/scene.js` · `js/input.js` · `js/logger.js` · `js/main.js`
