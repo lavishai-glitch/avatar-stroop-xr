@@ -170,6 +170,14 @@ export class Avatar {
     aim(L.fore, L.hand, T);
   }
 
+  // Point the hand (wrist -> fingers) at a world target.
+  aimHand(side, target) {
+    const L = this.b[side];
+    if (L.handTip !== L.hand) aim(L.hand, L.handTip, target);
+  }
+
+  wrist(side) { return this.b[side].hand.getWorldPosition(new THREE.Vector3()); }
+
   // relQ: head rotation in the avatar's convention (identity = looking along its forward).
   setHead(relQ) {
     const gq = this.group.getWorldQuaternion(new THREE.Quaternion());

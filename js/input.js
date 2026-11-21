@@ -40,6 +40,7 @@ export class Input {
         if (src.hand) this.diag.hands++;
         const space = src.gripSpace || src.targetRaySpace;
         const pose = space ? frame.getPose(space, ref) : null;
+        const rayPose = src.targetRaySpace ? frame.getPose(src.targetRaySpace, ref) : null;
         const gp = src.gamepad;
         const btn = (i) => !!(gp && gp.buttons[i] && gp.buttons[i].pressed);
         found[h] = {
@@ -47,6 +48,7 @@ export class Input {
           isHand: !!src.hand,
           pos: pose ? new THREE.Vector3().copy(pose.transform.position) : null,
           quat: pose ? new THREE.Quaternion().copy(pose.transform.orientation) : null,
+          rayQuat: rayPose ? new THREE.Quaternion().copy(rayPose.transform.orientation) : null,
           trigger: btn(0) || this.select[h],
           a: btn(4), b: btn(5), y: btn(5), grip: btn(1),
           buttons: gp ? gp.buttons.map((x) => (x.pressed ? 1 : 0)).join('') : '',
@@ -58,7 +60,8 @@ export class Input {
       let s;
       if (this.fake && this.fake[hand]) {
         const f = this.fake[hand];
-        s = { present: true, pos: f.pos.clone(), quat: (f.quat || new THREE.Quaternion()).clone(), trigger: !!f.trigger, a: !!f.a, b: !!f.b, y: !!f.y, grip: !!f.grip };
+        const q = (f.quat || new THREE.Quaternion()).clone();
+        s = { present: true, pos: f.pos.clone(), quat: q, rayQuat: q.clone(), trigger: !!f.trigger, a: !!f.a, b: !!f.b, y: !!f.y, grip: !!f.grip };
       } else if (found[hand]) {
         s = found[hand];
       } else {

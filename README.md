@@ -9,13 +9,14 @@ Live: https://lavishai-glitch.github.io/avatar-stroop-xr/
 1. **Setup page**: participant, session, phase, mapping, avatar, side sequence, button map, reps, training length.
 2. **Enter VR**: sit upright and look ahead. The scene aligns to your head. The left controller's Y button re-centres it on the instruction or rest screens.
 3. **Instructions**: press the right trigger to start.
-4. **Training (phase = post)**: build towers of 5 cubes on the white pad in front of the avatar.
-   - The controllers drive the avatar's hands. In anatomical mapping, the right controller drives its right hand, with movement rotated into its frame. In mirror mapping, the right controller drives its left hand and the lateral movement is mirrored.
-   - The mapping is relative. The moment you press the trigger to start, wherever your hands are becomes the avatar's resting hands, and movement from there is copied 1:1 (`MAPPING.gain`). A grip press re-centres that hand at any time, which is useful at the edge of your reach.
-   - The avatar's wrists are kept out of its torso: no closer than 17 cm to the chest, limited crossing of the midline (more as the hand moves forward), never below the table top. The limits are in `MAPPING` in `config.js`.
-   - Trigger grabs and releases a cube. Release over the pad to stack.
+4. **Training (phase = post)**: build towers of 5 cubes on the white pad in the middle of the table, at a distance from the avatar.
+   - The avatar holds a Quest-style controller in each hand. Your controllers drive its hands and its controllers. In anatomical mapping, the right controller drives its right hand. In mirror mapping, the right controller drives its left hand and the movement is mirrored.
+   - Position is relative: wherever your hands are when you press the trigger to start becomes the avatar's resting hands, and movement from there is copied 1:1. A grip press re-centres a hand.
+   - Orientation: your controller's pointing direction is rotated into the avatar's frame (mirrored in mirror mode). It aims the avatar's controller, its ray and its hand.
+   - A ray comes out of each avatar controller. Point it at a cube and hold the trigger. The cube follows the point where the ray meets the table. Release over the pad to stack the cube.
+   - The avatar's wrists are kept out of its torso and above the table (limits in `MAPPING` in `config.js`).
    - The first block uses the main training (default 300 s). Later blocks get a 45 s top-up.
-5. **Test, straight after training**: a cube with קרוב or רחוק on all six faces appears on the avatar's line of sight, near or far from the avatar. Press the button for the cube's location relative to the avatar and ignore the word (A = near, B = far, or swapped by the button-map setting). **The avatar keeps following the controllers during the test.**
+5. **Test, straight after training**: a cube with קרוב or רחוק on all six faces appears on the avatar's line of sight, near or far from the avatar. Press the button for the cube's location relative to the avatar and ignore the word (A = near, B = far, or swapped by the button-map setting). **The avatar keeps following the controllers during the test** (rays hidden).
 6. **20 s rest**: the avatar moves to the other side, then the next block starts.
 7. At the end, exit VR and download the files from the page.
 

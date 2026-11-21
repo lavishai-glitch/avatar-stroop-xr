@@ -30,8 +30,7 @@ export const TRAINING = {
   topUpSeconds: 45,       // before each later block
   cubesPerTower: 5,
   cubeSize: 0.07,
-  grabRadius: 0.10,       // avatar hand point to cube centre
-  snapRadius: 0.06,       // horizontal tolerance to land on the tower
+  snapRadius: 0.08,       // ray-on-table point within this of the pad centre = stack on the tower
 };
 
 // Controller -> avatar hand mapping (relative; metres in the avatar's frame, from its shoulder centre)
