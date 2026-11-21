@@ -132,11 +132,25 @@ function instructionText() {
   return ['ניסוי נקודת מבט', 'תחילה: בנה/י מגדלי קוביות דרך הידיים של הדמות', 'טריגר = תפיסה ושחרור', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות', `${map} · טריגר להתחלה`];
 }
 
+let panelKey = '';
+function diagLine() {
+  const d = input.diag;
+  if (!renderer.xr.isPresenting) return '';
+  if (d.hands > 0 && !d.right) return 'זוהו ידיים במקום שלטים: יש להחזיק את השלטים';
+  return `שלט ימין ${d.right ? '✓' : '✗'} · שלט שמאל ${d.left ? '✓' : '✗'}`;
+}
+function showInstructions() {
+  const lines = [...instructionText(), diagLine()].filter(Boolean);
+  const key = lines.join('|');
+  if (key !== panelKey) { panelKey = key; exp.setPanel(lines); }
+}
+
 function goInstructions() {
   const b = blocks[blockIdx];
   exp.setAvatarSide(b.side);
   exp.hideStim(); exp.fixation.visible = false; exp.hideHud();
-  exp.setPanel(instructionText());
+  panelKey = '';
+  showInstructions();
   state = 'instructions';
   ui.log(`Block ${b.idx}: avatar ${b.side}`);
 }
@@ -272,12 +286,16 @@ renderer.setAnimationLoop((time) => {
     pendingCalibrate = false;
     fakeRight.pos = null;
     ui.log(`Calibrated: eye height ${headPos.y.toFixed(2)} m, table ${exp.tableY.toFixed(2)} m`);
+    if (state === 'instructions') panelKey = '';
   }
   updateDesktopFake(dt);
   const inp = input.read();
 
   // Participant controls (instructions / rest)
-  if (state === 'instructions' && (inp.right.triggerDown || pendingStart)) { pendingStart = false; startBlock(now); }
+  if (state === 'instructions') {
+    showInstructions();
+    if (inp.right.triggerDown || inp.left.triggerDown || inp.right.aDown || pendingStart) { pendingStart = false; startBlock(now); }
+  }
   if ((state === 'instructions' || state === 'rest') && inp.left.yDown) pendingCalibrate = true;
 
   bodyMap.update(inp, headQuat);
@@ -298,6 +316,10 @@ renderer.setAnimationLoop((time) => {
   exp.faceCamera(headPos);
   renderer.render(scene, camera);
 });
+
+// Show runtime errors inside VR as well, so they can be reported.
+window.addEventListener('error', (e) => { ui.status('Error: ' + e.message); try { exp.setPanel(['שגיאה', String(e.message).slice(0, 60)]); } catch (_) { /* ignore */ } });
+window.addEventListener('unhandledrejection', (e) => { ui.status('Error: ' + (e.reason && e.reason.message)); });
 
 // ---------- buttons ----------
 for (const b of document.querySelectorAll('button')) b.addEventListener('click', () => b.blur());

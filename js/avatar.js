@@ -183,8 +183,9 @@ export class Avatar {
   restArm(side, tableY) {
     const sc = this.shoulderCentre(), f = this.forward(), r = this.right();
     const sgn = side === 'Right' ? 1 : -1;
-    const t = sc.clone().addScaledVector(f, 0.38).addScaledVector(r, sgn * 0.17);
-    t.y = tableY !== undefined ? tableY + 0.03 : sc.y - 0.32;
+    // Wrist 9 cm above the table so the hand and fingers stay above the surface.
+    const t = sc.clone().addScaledVector(f, 0.36).addScaledVector(r, sgn * 0.17);
+    t.y = tableY !== undefined ? tableY + 0.09 : sc.y - 0.26;
     this.reach(side, t);
   }
 
