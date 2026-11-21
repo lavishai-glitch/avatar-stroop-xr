@@ -48,7 +48,7 @@ export class Input {
           pos: pose ? new THREE.Vector3().copy(pose.transform.position) : null,
           quat: pose ? new THREE.Quaternion().copy(pose.transform.orientation) : null,
           trigger: btn(0) || this.select[h],
-          a: btn(4), b: btn(5), y: btn(5),
+          a: btn(4), b: btn(5), y: btn(5), grip: btn(1),
           buttons: gp ? gp.buttons.map((x) => (x.pressed ? 1 : 0)).join('') : '',
         };
       }
@@ -58,11 +58,11 @@ export class Input {
       let s;
       if (this.fake && this.fake[hand]) {
         const f = this.fake[hand];
-        s = { present: true, pos: f.pos.clone(), quat: (f.quat || new THREE.Quaternion()).clone(), trigger: !!f.trigger, a: !!f.a, b: !!f.b, y: !!f.y };
+        s = { present: true, pos: f.pos.clone(), quat: (f.quat || new THREE.Quaternion()).clone(), trigger: !!f.trigger, a: !!f.a, b: !!f.b, y: !!f.y, grip: !!f.grip };
       } else if (found[hand]) {
         s = found[hand];
       } else {
-        s = { present: false, trigger: false, a: false, b: false, y: false };
+        s = { present: false, trigger: false, a: false, b: false, y: false, grip: false };
       }
       const p = this.prev[hand];
       s.triggerDown = s.trigger && !p.trigger;
@@ -70,7 +70,8 @@ export class Input {
       s.aDown = s.a && !p.a;
       s.bDown = s.b && !p.b;
       s.yDown = s.y && !p.y;
-      this.prev[hand] = { trigger: s.trigger, a: s.a, b: s.b, y: s.y };
+      s.gripDown = s.grip && !p.grip;
+      this.prev[hand] = { trigger: s.trigger, a: s.a, b: s.b, y: s.y, grip: s.grip };
       out[hand] = s;
     }
     this.diag.right = out.right.present;

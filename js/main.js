@@ -129,7 +129,8 @@ function instructionText() {
   if (cfg.phase === 'pre') {
     return ['ניסוי נקודת מבט', 'קובייה תופיע על השולחן', 'לחצ/י לפי המיקום שלה ביחס לדמות', map, 'התעלם/י מהמילה · טריגר להתחלה'];
   }
-  return ['ניסוי נקודת מבט', 'תחילה: בנה/י מגדלי קוביות דרך הידיים של הדמות', 'טריגר = תפיסה ושחרור', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות', `${map} · טריגר להתחלה`];
+  return ['ניסוי נקודת מבט', 'בנה/י מגדלי קוביות דרך הידיים של הדמות · טריגר = תפיסה', 'אחר כך: לחצ/י לפי מיקום הקובייה ביחס לדמות · ' + map,
+    'grip = איפוס הידיים בכל רגע', 'החזק/י את הידיים לפנים בנוחות ולחצ/י טריגר להתחלה'];
 }
 
 let panelKey = '';
@@ -155,12 +156,13 @@ function goInstructions() {
   ui.log(`Block ${b.idx}: avatar ${b.side}`);
 }
 
-function startBlock(now) {
+function startBlock(now, inp) {
   const b = blocks[blockIdx];
   exp.setAvatarSide(b.side);
   exp.hidePanel();
   motionRows = [];
   bodyMap.mode = cfg.mapping;
+  bodyMap.calibrate(inp); // hands where they are now = avatar's resting hands
   if (cfg.phase === 'post') {
     const secs = blockIdx === 0 ? cfg.mainTrainingS : TRAINING.topUpSeconds;
     game.start(secs, now, `block${b.idx}`);
@@ -294,7 +296,7 @@ renderer.setAnimationLoop((time) => {
   // Participant controls (instructions / rest)
   if (state === 'instructions') {
     showInstructions();
-    if (inp.right.triggerDown || inp.left.triggerDown || inp.right.aDown || pendingStart) { pendingStart = false; startBlock(now); }
+    if (inp.right.triggerDown || inp.left.triggerDown || inp.right.aDown || pendingStart) { pendingStart = false; startBlock(now, inp); }
   }
   if ((state === 'instructions' || state === 'rest') && inp.left.yDown) pendingCalibrate = true;
 

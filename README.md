@@ -11,6 +11,8 @@ Live: https://lavishai-glitch.github.io/avatar-stroop-xr/
 3. **Instructions**: press the right trigger to start.
 4. **Training (phase = post)**: build towers of 5 cubes on the white pad in front of the avatar.
    - The controllers drive the avatar's hands. In anatomical mapping, the right controller drives its right hand, with movement rotated into its frame. In mirror mapping, the right controller drives its left hand and the lateral movement is mirrored.
+   - The mapping is relative. The moment you press the trigger to start, wherever your hands are becomes the avatar's resting hands, and movement from there is copied 1:1 (`MAPPING.gain`). A grip press re-centres that hand at any time, which is useful at the edge of your reach.
+   - The avatar's wrists are kept out of its torso: no closer than 17 cm to the chest, limited crossing of the midline (more as the hand moves forward), never below the table top. The limits are in `MAPPING` in `config.js`.
    - Trigger grabs and releases a cube. Release over the pad to stack.
    - The first block uses the main training (default 300 s). Later blocks get a 45 s top-up.
 5. **Test, straight after training**: a cube with קרוב or רחוק on all six faces appears on the avatar's line of sight, near or far from the avatar. Press the button for the cube's location relative to the avatar and ignore the word (A = near, B = far, or swapped by the button-map setting). **The avatar keeps following the controllers during the test.**

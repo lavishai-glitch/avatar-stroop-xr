@@ -62,7 +62,7 @@ export class TowerGame {
     this.pad.position.set(this.padPos.x, y0 + 0.003, this.padPos.z);
     this.tower = [];
     // [forward, lateral] from the shoulders, all within the avatar's reach (~0.45 m at table level)
-    const spots = [[0.24, -0.2], [0.34, -0.25], [0.44, -0.11], [0.44, 0.11], [0.34, 0.25], [0.24, 0.2], [0.2, 0]];
+    const spots = [[0.28, -0.2], [0.36, -0.25], [0.45, -0.12], [0.45, 0.12], [0.36, 0.25], [0.28, 0.2]];
     this.cubes.forEach((c, i) => {
       const [fw, lat] = spots[i % spots.length];
       const p = base.clone().addScaledVector(f, fw).addScaledVector(r, lat);
